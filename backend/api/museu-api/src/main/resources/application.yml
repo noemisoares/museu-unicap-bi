@@ -14,6 +14,11 @@ spring:
       # Útil nesta fase de estrutura; revisar quando houver regras que dependam do banco no startup.
       initialization-fail-timeout: -1
 
+app:
+  cors:
+    # Origens dos front-ends (totem e painel), separadas por vírgula. Ajustar por ambiente.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+
 logging:
   level:
     root: INFO

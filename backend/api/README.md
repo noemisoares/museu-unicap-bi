@@ -53,17 +53,22 @@ cp .env.example .env     # ajuste os valores; o .env não é versionado
    ```bash
    docker compose --env-file .env up -d
    ```
-2. Carregar as variáveis e iniciar a aplicação:
+2. Compilar e instalar os módulos (roda também os testes):
+   ```bash
+   mvn clean install
+   ```
+3. Carregar as variáveis do `.env` e iniciar a API (o `-am` **não** deve ser usado aqui):
+   ```powershell
+   # Windows (PowerShell)
+   Get-Content .env | Where-Object { $_ -match '^\s*[^#\s].*=' } | ForEach-Object {
+       $nome, $valor = $_ -split '=', 2
+       Set-Item -Path "Env:$($nome.Trim())" -Value $valor.Trim()
+   }
+   mvn -pl museu-api spring-boot:run
+   ```
    ```bash
    # Linux/macOS
    set -a; source .env; set +a
-   mvn -pl museu-api -am spring-boot:run
-   ```
-   ```bat
-   :: Windows (cmd): defina as variáveis antes, por exemplo
-   set DB_USER=museu_app
-   set DB_PASSWORD=troque-esta-senha
-   mvn clean install
    mvn -pl museu-api spring-boot:run
    ```
 
@@ -80,8 +85,23 @@ cp .env.example .env     # ajuste os valores; o .env não é versionado
    # {"status":"UP"}
    ```
 
+## Erros e logs (RF27)
+
+- **Erros da API** seguem um formato único (`ErroResposta`): `timestamp`, `status`, `codigo`, `mensagem`, `caminho` e, em validação, `campos`.
+  Os casos de uso lançam exceções da Application (`RecursoNaoEncontradoException`, `ConflitoException`,
+  `DadoInvalidoException`, `AcessoNegadoException`, `FalhaIntegracaoException`) e o `GlobalExceptionHandler`
+  as converte em 404, 409, 400, 403 e 503. Qualquer outra exceção vira 500 com mensagem genérica.
+- **Logs** passam pela porta `RegistroLogPort` (Application). Toda mensagem é mascarada antes de ser registrada:
+  e-mails, números longos (telefone, CPF) e valores de senha/token nunca vão para o log.
+- Por enquanto o adaptador (`RegistroLogSlf4j`) grava no log da aplicação. Quando a tabela de log existir (task 11),
+  entra um adaptador que grava no PostgreSQL, sem alterar nenhum caso de uso.
+
 ## Configuração segura
 
 - Nenhuma credencial fica no código. Banco e porta vêm de variáveis de ambiente (`.env.example` lista todas).
 - `.env` está no `.gitignore`.
 - Nesta fase a aplicação **inicia mesmo sem banco** (`hikari.initialization-fail-timeout: -1`); a conexão só é aberta no primeiro uso.
+
+## Próximos passos (fora do escopo da Task 10)
+
+Modelagem do banco (Task 11), infraestrutura transversal (log, erros, autenticação) e demais fluxos.

@@ -1,0 +1,752 @@
+openapi: 3.0.3
+info:
+  title: API do Livro de Visitantes Digital — Museu UNICAP
+  version: 0.1.0-rascunho
+  description: |
+    **Rascunho do contrato da API, para alinhar com o front-end antes da implementação.**
+    Montado a partir do fluxo do sistema v15. Rotas, campos e códigos de erro são propostas.
+
+    ## Convenções
+    - Prefixo `/api/v1`. JSON em UTF-8, datas em ISO-8601 (`2026-11-08T14:30:00Z`).
+    - Todo erro segue o mesmo formato (`ErroResposta`), inclusive 404 de rota inexistente.
+    - Mensagens de erro nunca trazem dados pessoais; erros de validação informam o campo e a regra, não o valor enviado.
+    - Rotas do painel exigem `Authorization: Bearer <token>`. As do totem não exigem login do gestor.
+
+    ## Pontos em aberto (confirmar com o grupo)
+    1. **Faixa etária** aparece na issue #13 (RF02), mas não no fluxo v15. Está como obrigatória aqui.
+    2. **Valores permitidos** de tipo de visita, faixa etária e status do totem ainda não foram definidos (listados como exemplos).
+    3. **Autenticação (RF26):** o desenho assume token Bearer; o mecanismo da conta institucional (SSO ou usuário/senha próprio) ainda não foi decidido.
+    4. **Avaliação de satisfação e avaliação pedagógica:** o RF22 fala em três módulos e o resumo do painel mostra NPS e avaliações, mas o fluxo v15 não tem endpoints para enviá-las. Faltam no contrato.
+    5. **"Inserir contato a ser revogado":** o fluxo não diz como o gestor identifica o contato. Aqui é pelo `id`.
+    6. **Perfis do painel:** só "Gerenciar contatos" exige perfil autorizado (403). Os demais exigem apenas login.
+servers:
+  - url: http://localhost:8080
+    description: Desenvolvimento local
+tags:
+  - name: Infra
+    description: Verificação técnica
+  - name: Totem
+    description: Usado pela aplicação web do visitante
+  - name: Painel
+    description: Usado pelo painel administrativo (exige login)
+paths:
+  /api/v1/health:
+    get:
+      tags: [Infra]
+      summary: Verifica se a API está no ar
+      description: Já implementado na task 10.
+      operationId: health
+      responses:
+        '200':
+          description: API no ar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: UP
+
+  /api/v1/checkins:
+    post:
+      tags: [Totem]
+      summary: Registra o check-in de entrada de uma visita
+      description: |
+        MBACK-0002 (#13). Valida os dados, grava a visitação (e o contato, se houver consentimento)
+        numa única transação, gera o protocolo (`CHK-AAAAMMDD-XXXX`) e atualiza o último acesso do totem.
+        A data e a hora são definidas pelo servidor.
+
+        - Quantidade de pessoas: padrão 1; deve ser maior que zero.
+        - O contato só é gravado se `contato.aceitouTermo` for `true` e e-mail/WhatsApp válidos.
+        - Sem consentimento, a visita é registrada normalmente e o contato é descartado.
+      operationId: criarCheckin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckinRequest'
+      responses:
+        '201':
+          description: Visita registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckinResponse'
+        '400':
+          $ref: '#/components/responses/Erro400'
+        '404':
+          $ref: '#/components/responses/Erro404'
+        '503':
+          $ref: '#/components/responses/Erro503'
+
+  /api/v1/instituicoes:
+    get:
+      tags: [Totem]
+      summary: Busca instituições cadastradas
+      description: Responde ao "Já cadastrada?" do fluxo do visitante.
+      operationId: buscarInstituicoes
+      parameters:
+        - name: busca
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+          description: Parte do nome da instituição
+      responses:
+        '200':
+          description: Lista (vazia se não houver)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Instituicao'
+        '400':
+          $ref: '#/components/responses/Erro400'
+    post:
+      tags: [Totem]
+      summary: Cadastra uma nova instituição
+      description: Usado quando a instituição que visita ainda não está cadastrada.
+      operationId: criarInstituicao
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstituicaoRequest'
+      responses:
+        '201':
+          description: Instituição criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Instituicao'
+        '400':
+          $ref: '#/components/responses/Erro400'
+        '409':
+          $ref: '#/components/responses/Erro409'
+
+  /api/v1/auth/login:
+    post:
+      tags: [Painel]
+      summary: Login por conta institucional
+      description: |
+        RF26. Falhas são registradas em log (tipo `FALHA_AUTENTICACAO`) sem gravar a senha.
+        O limite de 3 tentativas do fluxo ainda precisa de definição (bloqueio temporário ou só log).
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/Erro400'
+        '401':
+          $ref: '#/components/responses/Erro401'
+        '403':
+          $ref: '#/components/responses/Erro403'
+
+  /api/v1/totens:
+    post:
+      tags: [Painel]
+      summary: Cadastra um totem
+      operationId: criarTotem
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TotemRequest'
+      responses:
+        '201':
+          description: Totem cadastrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Totem'
+        '400':
+          $ref: '#/components/responses/Erro400'
+        '401':
+          $ref: '#/components/responses/Erro401'
+        '409':
+          $ref: '#/components/responses/Erro409'
+
+  /api/v1/totens/{id}/status:
+    patch:
+      tags: [Painel]
+      summary: Edita o status de um totem
+      operationId: editarStatusTotem
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusTotemRequest'
+      responses:
+        '200':
+          description: Status atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Totem'
+        '400':
+          $ref: '#/components/responses/Erro400'
+        '401':
+          $ref: '#/components/responses/Erro401'
+        '404':
+          $ref: '#/components/responses/Erro404'
+
+  /api/v1/topicos:
+    post:
+      tags: [Painel]
+      summary: Cria um tópico
+      operationId: criarTopico
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TopicoRequest'
+      responses:
+        '201':
+          description: Tópico criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Topico'
+        '400':
+          $ref: '#/components/responses/Erro400'
+        '401':
+          $ref: '#/components/responses/Erro401'
+        '409':
+          $ref: '#/components/responses/Erro409'
+
+  /api/v1/topicos/{id}:
+    put:
+      tags: [Painel]
+      summary: Edita um tópico
+      operationId: editarTopico
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TopicoRequest'
+      responses:
+        '200':
+          description: Tópico atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Topico'
+        '400':
+          $ref: '#/components/responses/Erro400'
+        '401':
+          $ref: '#/components/responses/Erro401'
+        '404':
+          $ref: '#/components/responses/Erro404'
+        '409':
+          $ref: '#/components/responses/Erro409'
+
+  /api/v1/contatos/{id}:
+    get:
+      tags: [Painel]
+      summary: Consulta um contato
+      description: |
+        Exige perfil autorizado. Todo acesso é registrado em log (tipo `ACESSO_CONTATO`),
+        sem gravar o e-mail nem o WhatsApp no log.
+        Contato revogado responde 410: o dado não é mais acessível.
+      operationId: consultarContato
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Contato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contato'
+        '401':
+          $ref: '#/components/responses/Erro401'
+        '403':
+          $ref: '#/components/responses/Erro403'
+        '404':
+          $ref: '#/components/responses/Erro404'
+        '410':
+          $ref: '#/components/responses/Erro410'
+
+  /api/v1/contatos/{id}/revogacao:
+    post:
+      tags: [Painel]
+      summary: Revoga um contato
+      description: |
+        Exige perfil autorizado. A confirmação ("Confirma revogação?") é feita na tela;
+        esta rota só é chamada depois dela. Registrada em log.
+      operationId: revogarContato
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Contato revogado
+        '401':
+          $ref: '#/components/responses/Erro401'
+        '403':
+          $ref: '#/components/responses/Erro403'
+        '404':
+          $ref: '#/components/responses/Erro404'
+        '409':
+          $ref: '#/components/responses/Erro409'
+
+  /api/v1/dashboard/resumo:
+    get:
+      tags: [Painel]
+      summary: Resumo de turno, NPS, visitas e avaliações
+      description: RF23 a RF25. Lê as views `app_admin` (somente leitura). Não traz dados de contato.
+      operationId: resumoDashboard
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Inicio'
+        - $ref: '#/components/parameters/Fim'
+        - $ref: '#/components/parameters/Categoria'
+      responses:
+        '200':
+          description: Indicadores do período
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resumo'
+        '400':
+          $ref: '#/components/responses/Erro400'
+        '401':
+          $ref: '#/components/responses/Erro401'
+        '503':
+          $ref: '#/components/responses/Erro503'
+
+  /api/v1/dashboard/totens:
+    get:
+      tags: [Painel]
+      summary: Monitora os totens
+      operationId: monitorarTotens
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Situação de cada totem
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Totem'
+        '401':
+          $ref: '#/components/responses/Erro401'
+        '503':
+          $ref: '#/components/responses/Erro503'
+
+  /api/v1/relatorios/visitas:
+    get:
+      tags: [Painel]
+      summary: Exporta o relatório de visitas (CSV)
+      description: Só visitas; nunca inclui dados de contato.
+      operationId: exportarRelatorioVisitas
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Inicio'
+        - $ref: '#/components/parameters/Fim'
+        - $ref: '#/components/parameters/Categoria'
+      responses:
+        '200':
+          description: Arquivo CSV
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: attachment; filename="visitas.csv"
+          content:
+            text/csv:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/Erro400'
+        '401':
+          $ref: '#/components/responses/Erro401'
+        '503':
+          $ref: '#/components/responses/Erro503'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Mecanismo ainda em decisão (ver pontos em aberto).
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Inicio:
+      name: inicio
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date
+      description: Início do período (inclusive)
+    Fim:
+      name: fim
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date
+      description: Fim do período (inclusive). Deve ser maior ou igual a `inicio`.
+    Categoria:
+      name: categoria
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Categoria de busca (valores a definir)
+
+  schemas:
+    ErroResposta:
+      type: object
+      required: [timestamp, status, codigo, mensagem]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+          example: 404
+        codigo:
+          type: string
+          description: |
+            Código estável, para o front tratar sem depender do texto.
+            `NAO_AUTENTICADO` (401) e `RECURSO_REVOGADO` (410) ainda não existem no código:
+            entram com a autenticação (RF26) e com os contatos.
+          enum:
+            - DADO_INVALIDO
+            - RECURSO_NAO_ENCONTRADO
+            - CONFLITO
+            - ACESSO_NEGADO
+            - NAO_AUTENTICADO
+            - RECURSO_REVOGADO
+            - FALHA_INTEGRACAO
+            - REQUISICAO_INVALIDA
+            - ERRO_INTERNO
+        mensagem:
+          type: string
+          example: Totem não encontrado.
+        caminho:
+          type: string
+          example: /api/v1/totens/3f2c.../status
+        campos:
+          type: array
+          description: Só em erro de validação (400)
+          items:
+            $ref: '#/components/schemas/CampoInvalido'
+    CampoInvalido:
+      type: object
+      required: [campo, mensagem]
+      properties:
+        campo:
+          type: string
+          example: quantidadePessoas
+        mensagem:
+          type: string
+          example: deve ser maior que zero
+
+    CheckinRequest:
+      type: object
+      required: [totemId, tipoVisita, faixaEtaria]
+      properties:
+        totemId:
+          type: string
+          format: uuid
+          description: Totem que está enviando (atualiza o último acesso)
+        instituicaoId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Preenchido quando o visitante é uma instituição
+        tipoVisita:
+          type: string
+          description: Valores definidos no MVP (a confirmar)
+          example: INDIVIDUAL
+        faixaEtaria:
+          type: string
+          description: Valores definidos no MVP (a confirmar)
+          example: ADULTO
+        procedencia:
+          $ref: '#/components/schemas/Procedencia'
+        quantidadePessoas:
+          type: integer
+          minimum: 1
+          default: 1
+        contato:
+          $ref: '#/components/schemas/ContatoRequest'
+    Procedencia:
+      type: object
+      description: Obrigatória quando não é instituição
+      required: [bairro, cidade, uf, pais]
+      properties:
+        bairro:
+          type: string
+        cidade:
+          type: string
+        uf:
+          type: string
+          minLength: 2
+          maxLength: 2
+          example: PE
+        pais:
+          type: string
+          example: Brasil
+    ContatoRequest:
+      type: object
+      description: Opcional. Só é gravado com `aceitouTermo = true`.
+      required: [aceitouTermo]
+      properties:
+        email:
+          type: string
+          format: email
+        whatsapp:
+          type: string
+          example: '81988887777'
+        aceitouTermo:
+          type: boolean
+    CheckinResponse:
+      type: object
+      required: [protocolo, status, registradoEm]
+      properties:
+        protocolo:
+          type: string
+          example: CHK-20261108-0042
+        status:
+          type: string
+          example: REGISTRADO
+        registradoEm:
+          type: string
+          format: date-time
+
+    Instituicao:
+      type: object
+      required: [id, nome]
+      properties:
+        id:
+          type: string
+          format: uuid
+        nome:
+          type: string
+    InstituicaoRequest:
+      type: object
+      required: [nome]
+      properties:
+        nome:
+          type: string
+          minLength: 2
+
+    LoginRequest:
+      type: object
+      required: [usuario, senha]
+      properties:
+        usuario:
+          type: string
+        senha:
+          type: string
+          format: password
+    LoginResponse:
+      type: object
+      required: [accessToken, tipo, expiraEm]
+      properties:
+        accessToken:
+          type: string
+        tipo:
+          type: string
+          example: Bearer
+        expiraEm:
+          type: string
+          format: date-time
+
+    Totem:
+      type: object
+      required: [id, identificador, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        identificador:
+          type: string
+          example: TOTEM-ENTRADA-01
+        status:
+          type: string
+          description: Valores a definir
+          example: ATIVO
+        ultimoAcessoEm:
+          type: string
+          format: date-time
+          nullable: true
+    TotemRequest:
+      type: object
+      required: [identificador]
+      properties:
+        identificador:
+          type: string
+          minLength: 2
+    StatusTotemRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: INATIVO
+
+    Topico:
+      type: object
+      required: [id, nome]
+      properties:
+        id:
+          type: string
+          format: uuid
+        nome:
+          type: string
+        descricao:
+          type: string
+          nullable: true
+    TopicoRequest:
+      type: object
+      required: [nome]
+      properties:
+        nome:
+          type: string
+          minLength: 2
+        descricao:
+          type: string
+
+    Contato:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+          nullable: true
+        whatsapp:
+          type: string
+          nullable: true
+        registradoEm:
+          type: string
+          format: date-time
+
+    Resumo:
+      type: object
+      properties:
+        inicio:
+          type: string
+          format: date
+        fim:
+          type: string
+          format: date
+        totalVisitas:
+          type: integer
+        totalVisitantes:
+          type: integer
+        nps:
+          type: number
+          format: float
+          nullable: true
+        totalAvaliacoes:
+          type: integer
+        visitasPorTurno:
+          type: array
+          items:
+            type: object
+            properties:
+              turno:
+                type: string
+                example: MANHA
+              visitas:
+                type: integer
+
+  responses:
+    Erro400:
+      description: Dados inválidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroResposta'
+    Erro401:
+      description: Não autenticado ou credenciais inválidas
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroResposta'
+    Erro403:
+      description: Sem permissão para a operação
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroResposta'
+    Erro404:
+      description: Recurso não existe
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroResposta'
+    Erro409:
+      description: Conflito (já registrado, já revogado)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroResposta'
+    Erro410:
+      description: Recurso revogado, não mais acessível
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroResposta'
+    Erro503:
+      description: Falha ao acessar o banco ou as views
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroResposta'

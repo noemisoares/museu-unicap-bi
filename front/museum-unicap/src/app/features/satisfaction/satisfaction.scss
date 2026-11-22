@@ -1,0 +1,157 @@
+/* Exit kiosk satisfaction page (prototype: totem_de_sa_da_avalia_o_quick_touch). */
+
+.satisfaction-page {
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding-block: var(--space-md) var(--space-lg);
+}
+
+/* --- Kiosk header --- */
+
+.satisfaction-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding-block: var(--space-sm);
+}
+
+.brand-mark {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  background: var(--primary-container);
+  color: var(--on-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-1);
+}
+
+/* --- Intro --- */
+
+.satisfaction-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  text-align: center;
+}
+
+.intro-title {
+  max-width: 24rem;
+}
+
+/* --- Likert scale --- */
+
+.likert-fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.likert-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-sm);
+}
+
+@media (min-width: 640px) {
+  .likert-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+.likert-option {
+  flex-direction: column;
+  min-height: 82px;
+  gap: 0.25rem;
+}
+
+/* Favorite option gets a slightly brighter surface, like the prototype. */
+.likert-option--top {
+  background: var(--surface-container-lowest);
+}
+
+/* Estado selecionado para o Likert 1–5 */
+.likert-option:has(input:checked) {
+  background: var(--primary-container);
+  border-color: var(--primary);
+  color: var(--on-primary);
+  box-shadow: var(--shadow-1);
+}
+
+.likert-option:has(input:checked) .likert-face,
+.likert-option:has(input:checked) .likert-label,
+.likert-option:has(input:checked) .likert-caption {
+  color: var(--on-primary);
+}
+
+/* Estado selecionado para tópicos opcionais (checkbox chips) */
+.topics-chip:has(input:checked),
+.choice--pill:has(input:checked) {
+  background: var(--primary-container);
+  color: var(--on-primary);
+  border-color: var(--primary);
+}
+
+/* Foco visível para navegação por teclado (WCAG AA / AXE) */
+.likert-option:has(input:focus-visible),
+.topics-chip:has(input:focus-visible),
+.choice--pill:has(input:focus-visible) {
+  outline: 3px solid rgba(110, 18, 32, 0.6);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
+}
+
+.likert-face {
+  font-size: 28px;
+  line-height: 1;
+}
+
+/* --- Topics --- */
+
+.topics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  border-radius: var(--radius-md);
+}
+
+.topics-header {
+  flex-wrap: wrap;
+}
+
+.topics-optional {
+  margin-left: auto;
+}
+
+.topics-chip {
+  min-height: 48px;
+}
+
+/* --- Submission --- */
+
+.submit-button {
+  width: 100%;
+}
+
+/* --- Footer --- */
+
+.satisfaction-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+  padding-top: var(--space-md);
+}
+
+.privacy-note {
+  justify-content: center;
+}
+
+/* --- Thank-you modal --- */

@@ -1,4 +1,4 @@
-import { Component, OnDestroy, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { FormField, form, required } from '@angular/forms/signals';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { catchError, of } from 'rxjs';
@@ -38,7 +38,7 @@ function isSatisfactionRating(value: number): value is SatisfactionRating {
   styleUrl: './satisfaction.scss',
   templateUrl: './satisfaction.html',
 })
-export class Satisfaction implements OnDestroy {
+export class Satisfaction {
   private readonly satisfactionService = inject(SatisfactionService);
 
   /** Radio inputs hold string values; converted to 1–5 in the payload. */
@@ -63,13 +63,6 @@ export class Satisfaction implements OnDestroy {
   protected readonly submitting = signal(false);
   protected readonly submitError = signal<string | null>(null);
   protected readonly successResponse = signal<SatisfactionEvaluationResponse | null>(null);
-  protected readonly countdown = signal(2);
-
-  private countdownHandle: ReturnType<typeof setInterval> | null = null;
-
-  ngOnDestroy(): void {
-    this.stopCountdown();
-  }
 
   protected isTopicSelected(topicId: string): boolean {
     return this.selectedTopicIds().includes(topicId);
@@ -94,7 +87,6 @@ export class Satisfaction implements OnDestroy {
 
   /** Closes the thank-you dialog and resets the kiosk for the next visitor. */
   protected resetTotem(): void {
-    this.stopCountdown();
     this.successResponse.set(null);
     this.selectedTopicIds.set([]);
     this.formModel.set({ rating: '' });
@@ -118,31 +110,10 @@ export class Satisfaction implements OnDestroy {
         this.satisfactionService.submitEvaluation(request),
       );
       this.successResponse.set(response);
-      this.startCountdown();
     } catch (error: unknown) {
       this.submitError.set(apiErrorMessage(error));
     } finally {
       this.submitting.set(false);
-    }
-  }
-
-  private startCountdown(): void {
-    this.stopCountdown();
-    this.countdown.set(2);
-    this.countdownHandle = setInterval(() => {
-      const next = this.countdown() - 1;
-      if (next <= 0) {
-        this.resetTotem();
-      } else {
-        this.countdown.set(next);
-      }
-    }, 1000);
-  }
-
-  private stopCountdown(): void {
-    if (this.countdownHandle !== null) {
-      clearInterval(this.countdownHandle);
-      this.countdownHandle = null;
     }
   }
 }

@@ -165,9 +165,36 @@
   flex-shrink: 0;
 }
 
+.choice--tile:has(input:checked) {
+  background: var(--primary-container);
+  color: var(--on-primary);
+}
+
 .choice--tile:has(input:checked) .tile-icon {
   background: var(--primary-container);
   color: var(--on-primary);
+}
+
+.choice--tile:has(input:checked) .tile-title,
+.choice--tile:has(input:checked) .tile-body {
+  color: var(--on-primary);
+}
+
+/* Estado selecionado para pills de faixa etária, vínculo, UF, município, bairro */
+.choice--pill:has(input:checked),
+.choice--pill-block:has(input:checked),
+.choice--accent:has(input:checked),
+.choice--pill-sm:has(input:checked) {
+  background: var(--primary-container);
+  color: var(--on-primary);
+  border-color: var(--primary);
+}
+
+/* Foco visível para navegação por teclado (WCAG AA / AXE) */
+.choice:has(input:focus-visible) {
+  outline: 3px solid rgba(110, 18, 32, 0.6);
+  outline-offset: 2px;
+  border-radius: var(--radius);
 }
 
 .tile-body {

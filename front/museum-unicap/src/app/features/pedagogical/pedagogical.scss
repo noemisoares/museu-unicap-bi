@@ -133,6 +133,29 @@
   min-height: 54px;
 }
 
+/* Estado selecionado para segments (rede, escala, mediação, materiais, canal) */
+.choice--segment:has(input:checked),
+.choice--segment-block:has(input:checked) {
+  background: var(--primary-container);
+  color: var(--on-primary);
+  border-color: var(--primary);
+}
+
+/* Estado selecionado para pills (ciclos de ensino, bairro, vínculo etc.) */
+.choice--pill:has(input:checked),
+.choice--accent:has(input:checked) {
+  background: var(--primary-container);
+  color: var(--on-primary);
+  border-color: var(--primary);
+}
+
+/* Foco visível para navegação por teclado (WCAG AA / AXE) */
+.choice:has(input:focus-visible) {
+  outline: 3px solid rgba(110, 18, 32, 0.6);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
 .scale-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);

@@ -42,15 +42,36 @@ CREATE POLICY avaliacao_pedagogica_legada_select_admin ON core.avaliacao_pedagog
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_bi') THEN
+    REVOKE ALL ON SCHEMA pii FROM app_bi;
+    REVOKE ALL ON ALL TABLES IN SCHEMA pii FROM app_bi;
+    REVOKE ALL ON core.admin_usuario FROM app_bi;
+    REVOKE SELECT ON
+      core.avaliacao_satisfacao,
+      core.avaliacao_pedagogica,
+      core.avaliacao_pedagogica_completa
+    FROM app_bi;
+
     GRANT SELECT ON
       core.instituicao,
       core.terminal,
       core.topico,
-      core.visitacao,
-      core.avaliacao_satisfacao,
-      core.avaliacao_pedagogica,
-      core.avaliacao_pedagogica_completa
+      core.visitacao
     TO app_bi;
+
+    -- Concede leitura apenas das colunas não textuais/não sensíveis (exclui comentario e sugestoes)
+    GRANT SELECT (
+      id, visitacao_id, terminal_id, topico_id, nota_likert, nota_nps, criado_em, protocolo
+    ) ON core.avaliacao_satisfacao TO app_bi;
+
+    GRANT SELECT (
+      id, visitacao_id, instituicao_id, topico_id, nota_likert, criado_em
+    ) ON core.avaliacao_pedagogica TO app_bi;
+
+    GRANT SELECT (
+      id, visitacao_id, instituicao_nome, rede, ciclos, qtd_estudantes,
+      nota_curriculo, avaliacao_mediadores, avaliacao_materiais,
+      interesse_visitas_futuras, protocolo, terminal_id, criado_em
+    ) ON core.avaliacao_pedagogica_completa TO app_bi;
 
     GRANT SELECT ON
       core.vw_fato_avaliacao_pedagogica,

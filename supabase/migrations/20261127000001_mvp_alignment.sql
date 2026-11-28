@@ -94,8 +94,6 @@ CREATE TABLE IF NOT EXISTS core.avaliacao_pedagogica_completa (
   avaliacao_materiais       VARCHAR(20)  NOT NULL,
   sugestoes                 TEXT,
   interesse_visitas_futuras BOOLEAN      NOT NULL DEFAULT FALSE,
-  canal_contato             VARCHAR(10),
-  valor_contato             VARCHAR(100),
   protocolo                 VARCHAR(30),
   terminal_id               UUID,
   criado_em                 TIMESTAMPTZ  NOT NULL DEFAULT now(),
@@ -114,9 +112,6 @@ CREATE TABLE IF NOT EXISTS core.avaliacao_pedagogica_completa (
   CONSTRAINT ck_apc_avaliacao_materiais CHECK (
     avaliacao_materiais IN ('ADEQUADO', 'INADEQUADO', 'NAO_UTILIZADO')
   ),
-  CONSTRAINT ck_apc_canal_contato CHECK (
-    canal_contato IS NULL OR canal_contato IN ('WHATSAPP', 'PHONE')
-  ),
   CONSTRAINT ck_apc_qtd_estudantes CHECK (qtd_estudantes >= 1)
 );
 
@@ -125,6 +120,37 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_apc_protocolo
 
 CREATE INDEX IF NOT EXISTS idx_apc_criado_em
   ON core.avaliacao_pedagogica_completa (criado_em);
+
+-- Dados de contato de docentes ficam isolados no schema pii (LGPD)
+CREATE TABLE IF NOT EXISTS pii.contato_pedagogico (
+  id                        UUID         NOT NULL DEFAULT gen_random_uuid(),
+  avaliacao_pedagogica_id   UUID         NOT NULL,
+  canal_contato             VARCHAR(10)  NOT NULL,
+  valor_contato             VARCHAR(100),
+  consentimento             BOOLEAN      NOT NULL DEFAULT TRUE,
+  finalidade_consentimento  VARCHAR(100) NOT NULL DEFAULT 'Agendamento de visitas futuras e retorno pedagogico',
+  data_consentimento        TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  data_revogacao            TIMESTAMPTZ,
+  criado_em                 TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  CONSTRAINT pk_contato_pedagogico PRIMARY KEY (id),
+  CONSTRAINT uq_contato_pedagogico_avaliacao UNIQUE (avaliacao_pedagogica_id),
+  CONSTRAINT fk_contato_pedagogico_avaliacao FOREIGN KEY (avaliacao_pedagogica_id)
+    REFERENCES core.avaliacao_pedagogica_completa (id) ON DELETE CASCADE,
+  CONSTRAINT ck_cp_canal_contato CHECK (canal_contato IN ('WHATSAPP', 'PHONE')),
+  CONSTRAINT ck_cp_meio_contato CHECK (
+    consentimento = FALSE OR NULLIF(TRIM(valor_contato), '') IS NOT NULL
+  ),
+  CONSTRAINT ck_cp_estado_consentimento CHECK (
+    (consentimento = TRUE  AND data_revogacao IS NULL) OR
+    (consentimento = FALSE AND data_revogacao IS NOT NULL)
+  ),
+  CONSTRAINT ck_cp_revogado_anonimizado CHECK (
+    consentimento = TRUE OR valor_contato IS NULL
+  )
+);
+
+COMMENT ON TABLE pii.contato_pedagogico IS
+  'Dados pessoais de contato informados por docentes na avaliacao pedagogica (LGPD). Isolado de core.';
 
 -- ---------------------------------------------------------------------------
 -- 5. Adicionar icon à tabela de tópicos (para servir ao frontend)
@@ -373,6 +399,8 @@ BEGIN
     END LOOP;
   END IF;
 
+  UPDATE core.terminal SET ultimo_acesso = now() WHERE id = v_terminal_id;
+
   RETURN jsonb_build_object(
     'protocol', v_protocolo,
     'evaluatedAt', now()
@@ -401,11 +429,14 @@ CREATE OR REPLACE FUNCTION core.registrar_pedagogica(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = core, public
+SET search_path = core, pii, public
 AS $$
 DECLARE
-  v_terminal_id UUID;
-  v_protocolo   TEXT;
+  v_terminal_id  UUID;
+  v_avaliacao_id UUID;
+  v_protocolo    TEXT;
+  v_valor        TEXT;
+  v_canal        TEXT;
 BEGIN
   IF NULLIF(TRIM(p_instituicao_nome), '') IS NULL THEN
     RAISE EXCEPTION 'Nome da instituicao e obrigatorio.';
@@ -425,14 +456,31 @@ BEGIN
     instituicao_nome, rede, ciclos, qtd_estudantes,
     nota_curriculo, avaliacao_mediadores, avaliacao_materiais,
     sugestoes, interesse_visitas_futuras,
-    canal_contato, valor_contato, protocolo, terminal_id
+    protocolo, terminal_id
   ) VALUES (
     TRIM(p_instituicao_nome), UPPER(p_rede), p_ciclos, p_qtd_estudantes,
     p_nota_curriculo, UPPER(p_avaliacao_mediadores), UPPER(p_avaliacao_materiais),
     NULLIF(TRIM(p_sugestoes), ''), COALESCE(p_interesse_visitas_futuras, FALSE),
-    CASE WHEN NULLIF(TRIM(p_canal_contato), '') IS NOT NULL THEN UPPER(TRIM(p_canal_contato)) ELSE NULL END,
-    NULLIF(TRIM(p_valor_contato), ''), v_protocolo, v_terminal_id
-  );
+    v_protocolo, v_terminal_id
+  )
+  RETURNING id INTO v_avaliacao_id;
+
+  v_valor := NULLIF(TRIM(p_valor_contato), '');
+  v_canal := COALESCE(NULLIF(UPPER(TRIM(p_canal_contato)), ''), 'WHATSAPP');
+
+  IF COALESCE(p_interesse_visitas_futuras, FALSE) = TRUE AND v_valor IS NOT NULL THEN
+    INSERT INTO pii.contato_pedagogico (
+      avaliacao_pedagogica_id, canal_contato, valor_contato,
+      consentimento, finalidade_consentimento, data_consentimento
+    ) VALUES (
+      v_avaliacao_id, v_canal, v_valor,
+      TRUE, 'Agendamento de visitas futuras e retorno pedagogico', now()
+    );
+  END IF;
+
+  IF v_terminal_id IS NOT NULL THEN
+    UPDATE core.terminal SET ultimo_acesso = now() WHERE id = v_terminal_id;
+  END IF;
 
   RETURN jsonb_build_object(
     'protocol', v_protocolo,
@@ -464,9 +512,10 @@ BEGIN
     RAISE EXCEPTION 'Acesso nao autorizado.' USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT count(*)::INTEGER INTO v_total
-    FROM pii.contato c
-   WHERE c.consentimento = TRUE;
+  SELECT (
+    (SELECT count(*)::INTEGER FROM pii.contato c WHERE c.consentimento = TRUE) +
+    (SELECT count(*)::INTEGER FROM pii.contato_pedagogico cp WHERE cp.consentimento = TRUE)
+  ) INTO v_total;
 
   v_safe_page := GREATEST(1, COALESCE(p_page, 1));
   v_offset := (v_safe_page - 1) * GREATEST(1, COALESCE(p_page_size, 4));
@@ -474,32 +523,62 @@ BEGIN
   SELECT COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb) INTO v_items
   FROM (
     SELECT
-      c.id,
-      COALESCE(c.nome, 'Visitante') AS name,
-      CASE v.tipo_visita
-        WHEN 'GRUPO_ESCOLAR' THEN 'Grupo Escolar • ' || v.qtd_visitantes || ' pessoas'
-        WHEN 'FAMILIA'       THEN 'Família • ' || v.qtd_visitantes || ' pessoas'
-        WHEN 'ACADEMICO'     THEN 'Pesquisa / Cultural'
-        ELSE 'Visita individual'
-      END AS detail,
-      CASE v.tipo_visita
-        WHEN 'GRUPO_ESCOLAR' THEN 'docente'
-        WHEN 'FAMILIA'       THEN 'familia'
-        WHEN 'ACADEMICO'     THEN 'pesquisa'
-        ELSE 'individual'
-      END AS category,
-      COALESCE(c.whatsapp, '') AS phone,
-      COALESCE(c.email, '') AS email,
-      TRIM(
-        COALESCE(v.cidade, 'Não informado') ||
-        CASE WHEN v.bairro IS NOT NULL THEN ' (' || v.bairro || ')' ELSE '' END
-      ) AS origin,
-      COALESCE(v.data_hora, c.criado_em) AS "checkedInAt",
-      c.consentimento AS consent
-    FROM pii.contato c
-    LEFT JOIN core.visitacao v ON v.id = c.visitacao_id
-    WHERE c.consentimento = TRUE
-    ORDER BY c.criado_em DESC
+      all_contacts.id,
+      all_contacts.name,
+      all_contacts.detail,
+      all_contacts.category,
+      all_contacts.phone,
+      all_contacts.email,
+      all_contacts.origin,
+      all_contacts."checkedInAt",
+      all_contacts.consent
+    FROM (
+      SELECT
+        c.id,
+        COALESCE(c.nome, 'Visitante') AS name,
+        CASE v.tipo_visita
+          WHEN 'GRUPO_ESCOLAR' THEN 'Grupo Escolar • ' || v.qtd_visitantes || ' pessoas'
+          WHEN 'FAMILIA'       THEN 'Família • ' || v.qtd_visitantes || ' pessoas'
+          WHEN 'ACADEMICO'     THEN 'Pesquisa / Cultural'
+          ELSE 'Visita individual'
+        END AS detail,
+        CASE v.tipo_visita
+          WHEN 'GRUPO_ESCOLAR' THEN 'docente'
+          WHEN 'FAMILIA'       THEN 'familia'
+          WHEN 'ACADEMICO'     THEN 'pesquisa'
+          ELSE 'individual'
+        END AS category,
+        COALESCE(c.whatsapp, '') AS phone,
+        COALESCE(c.email, '') AS email,
+        TRIM(
+          COALESCE(v.cidade, 'Não informado') ||
+          CASE WHEN v.bairro IS NOT NULL THEN ' (' || v.bairro || ')' ELSE '' END
+        ) AS origin,
+        COALESCE(v.data_hora, c.criado_em) AS "checkedInAt",
+        c.consentimento AS consent,
+        c.criado_em AS ordenacao_em
+      FROM pii.contato c
+      LEFT JOIN core.visitacao v ON v.id = c.visitacao_id
+      WHERE c.consentimento = TRUE
+
+      UNION ALL
+
+      SELECT
+        cp.id,
+        apc.instituicao_nome AS name,
+        'Docente • ' || apc.qtd_estudantes || ' estudantes' AS detail,
+        'docente' AS category,
+        COALESCE(cp.valor_contato, '') AS phone,
+        '' AS email,
+        'Formulário Pedagógico' AS origin,
+        apc.criado_em AS "checkedInAt",
+        cp.consentimento AS consent,
+        cp.criado_em AS ordenacao_em
+      FROM pii.contato_pedagogico cp
+      JOIN core.avaliacao_pedagogica_completa apc ON apc.id = cp.avaliacao_pedagogica_id
+      WHERE cp.consentimento = TRUE
+    ) all_contacts
+    ORDER BY all_contacts.ordenacao_em DESC
     LIMIT GREATEST(1, COALESCE(p_page_size, 4))
     OFFSET v_offset
   ) t;
@@ -533,11 +612,22 @@ BEGIN
     RAISE EXCEPTION 'Acesso nao autorizado.' USING ERRCODE = 'insufficient_privilege';
   END IF;
 
-  SELECT count(*)::INTEGER INTO v_count
-    FROM pii.contato c
-   WHERE c.consentimento = TRUE
-     AND (p_inicio IS NULL OR c.criado_em >= p_inicio)
-     AND (p_fim IS NULL OR c.criado_em < p_fim);
+  SELECT (
+    (
+      SELECT count(*)::INTEGER
+        FROM pii.contato c
+       WHERE c.consentimento = TRUE
+         AND (p_inicio IS NULL OR c.criado_em >= p_inicio)
+         AND (p_fim IS NULL OR c.criado_em < p_fim)
+    ) +
+    (
+      SELECT count(*)::INTEGER
+        FROM pii.contato_pedagogico cp
+       WHERE cp.consentimento = TRUE
+         AND (p_inicio IS NULL OR cp.criado_em >= p_inicio)
+         AND (p_fim IS NULL OR cp.criado_em < p_fim)
+    )
+  ) INTO v_count;
 
   RETURN v_count;
 END;
@@ -629,16 +719,24 @@ REVOKE ALL ON ALL TABLES IN SCHEMA pii FROM PUBLIC, anon, authenticated;
 
 GRANT USAGE ON SCHEMA core TO anon, authenticated;
 
--- Funções RPC públicas (coleta nos totens e formulário web)
-GRANT EXECUTE ON FUNCTION core.registrar_checkin TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION core.registrar_satisfacao TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION core.registrar_pedagogica TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION core.gerar_protocolo TO anon, authenticated;
+-- Revoga EXECUTE padrão de PUBLIC em todas as funções criadas nesta migration
+REVOKE ALL ON FUNCTION core.gerar_protocolo(TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION core.registrar_checkin(TEXT, INTEGER, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION core.registrar_satisfacao(INTEGER, UUID[], TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION core.registrar_pedagogica(TEXT, TEXT, TEXT[], INTEGER, INTEGER, TEXT, TEXT, TEXT, BOOLEAN, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION core.is_admin() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION core.listar_contatos_admin(INTEGER, INTEGER) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION core.contar_contatos_optin(TIMESTAMPTZ, TIMESTAMPTZ) FROM PUBLIC, anon, authenticated;
 
--- Funções RPC administrativas
-GRANT EXECUTE ON FUNCTION core.is_admin TO authenticated;
-GRANT EXECUTE ON FUNCTION core.listar_contatos_admin TO authenticated;
-GRANT EXECUTE ON FUNCTION core.contar_contatos_optin TO authenticated;
+-- Funções RPC públicas (coleta nos totens e formulário web)
+GRANT EXECUTE ON FUNCTION core.registrar_checkin(TEXT, INTEGER, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION core.registrar_satisfacao(INTEGER, UUID[], TEXT) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION core.registrar_pedagogica(TEXT, TEXT, TEXT[], INTEGER, INTEGER, TEXT, TEXT, TEXT, BOOLEAN, TEXT, TEXT, TEXT) TO anon, authenticated;
+
+-- Funções RPC administrativas (bloqueadas para anon)
+GRANT EXECUTE ON FUNCTION core.is_admin() TO authenticated;
+GRANT EXECUTE ON FUNCTION core.listar_contatos_admin(INTEGER, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION core.contar_contatos_optin(TIMESTAMPTZ, TIMESTAMPTZ) TO authenticated;
 
 -- Leitura pública apenas do catálogo de tópicos e terminais
 GRANT SELECT ON core.topico TO anon, authenticated;
@@ -673,6 +771,7 @@ ALTER TABLE core.terminal ENABLE ROW LEVEL SECURITY;
 ALTER TABLE core.instituicao ENABLE ROW LEVEL SECURITY;
 ALTER TABLE core.admin_usuario ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pii.contato ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pii.contato_pedagogico ENABLE ROW LEVEL SECURITY;
 
 -- Catálogos públicos
 DROP POLICY IF EXISTS topico_select_public ON core.topico;
@@ -712,6 +811,10 @@ CREATE POLICY admin_usuario_select_self ON core.admin_usuario
 -- acesso exclusivamente via funções SECURITY DEFINER que validam core.is_admin().
 DROP POLICY IF EXISTS contato_select_none ON pii.contato;
 CREATE POLICY contato_select_none ON pii.contato
+  FOR SELECT TO authenticated USING (false);
+
+DROP POLICY IF EXISTS contato_pedagogico_select_none ON pii.contato_pedagogico;
+CREATE POLICY contato_pedagogico_select_none ON pii.contato_pedagogico
   FOR SELECT TO authenticated USING (false);
 
 COMMENT ON FUNCTION core.is_admin IS 'Verifica se o usuario autenticado e administrador autorizado (via app_metadata.role ou core.admin_usuario).';

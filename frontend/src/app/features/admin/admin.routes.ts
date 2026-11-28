@@ -12,6 +12,11 @@ export const ADMIN_ROUTES: Routes = [
         title: 'Dashboard • Portal de Gestão UNICAP',
         loadComponent: () => import('./dashboard/dashboard').then((m) => m.Dashboard),
       },
+      {
+        path: 'unidades',
+        loadChildren: () =>
+          import('../unidades/unidades.routes').then((m) => m.UNIDADES_ROUTES),
+      },
     ],
   },
 ];

@@ -1,0 +1,145 @@
+<!-- Detalhe de uma unidade expositora e suas mostras/modelos. -->
+<header class="page-header">
+  <div class="page-header-inner row">
+    <button
+      class="btn btn--tonal btn--compact back-btn"
+      type="button"
+      (click)="goBack()"
+      aria-label="Voltar à lista de unidades"
+    >
+      <span class="icon icon-18" aria-hidden="true">arrow_back</span>
+      Voltar
+    </button>
+    <div class="title-wrapper">
+      <h1 class="t-headline-md">{{ unidade()?.nome ?? 'Unidade' }}</h1>
+      <p class="t-caption text-muted">
+        {{ unidade()?.sigla ? unidade()!.sigla + ' • ' : '' }}
+        {{ unidade()?.cidade }}, {{ unidade()?.estado }}
+      </p>
+    </div>
+  </div>
+</header>
+
+<main class="page unidade-detail">
+  @if (isLoading()) {
+    <div class="empty-state row stack-sm" role="status">
+      <span class="icon icon-32 spin" aria-hidden="true">progress_activity</span>
+      <p class="t-label-lg text-muted">Carregando unidade…</p>
+    </div>
+  } @else if (loadFailed()) {
+    <div class="empty-state row stack-sm">
+      <p class="feedback feedback--error" role="alert">
+        <span class="icon icon-18" aria-hidden="true">cloud_off</span>
+        Não foi possível carregar a unidade.
+      </p>
+      <button class="btn btn--primary btn--compact" type="button" (click)="goBack()">
+        Voltar à lista
+      </button>
+    </div>
+  } @else if (unidade(); as u) {
+    <section class="unidade-info card stack-sm">
+      <div class="unidade-status row">
+        <span
+          class="status-badge"
+          [class.status-badge--ativo]="u.ativo"
+        >
+          {{ u.ativo ? 'Ativa' : 'Inativa' }}
+        </span>
+      </div>
+      @if (u.descricao) {
+        <p class="t-body-md">{{ u.descricao }}</p>
+      }
+      <div class="unidade-meta grid">
+        <div class="meta-item">
+          <span class="t-caption text-muted meta-label">Endereço</span>
+          <p class="t-label-md meta-value">{{ u.endereco ?? '—' }}</p>
+        </div>
+        <div class="meta-item">
+          <span class="t-caption text-muted meta-label">Telefone</span>
+          <p class="t-label-md meta-value">{{ u.telefone ?? '—' }}</p>
+        </div>
+        <div class="meta-item">
+          <span class="t-caption text-muted meta-label">E-mail</span>
+          <p class="t-label-md meta-value">{{ u.email ?? '—' }}</p>
+        </div>
+        <div class="meta-item">
+          <span class="t-caption text-muted meta-label">Responsável</span>
+          <p class="t-label-md meta-value">{{ u.responsavel ?? '—' }}</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="modelos-section card stack-sm">
+      <header class="section-head row">
+        <h2 class="t-headline-sm">Mostras / Modelos</h2>
+        <span class="t-caption text-muted">
+          {{ modelos()?.length ?? 0 }} modelo(s)
+        </span>
+      </header>
+
+      @if (modelos()?.length === 0) {
+        <div class="empty-state row stack-sm">
+          <span class="icon icon-32" aria-hidden="true">collection_off</span>
+          <p class="t-label-lg text-muted">Nenhuma mostra cadastrada nesta unidade.</p>
+        </div>
+      } @else {
+        <div class="modelos-grid" aria-label="Mostras da unidade {{ u.nome }}">
+          @for (modelo of modelos(); track modelo.id) {
+            <article
+              class="modelo-card card"
+              (click)="goToModelo(modelo.id)"
+              role="button"
+              tabindex="0"
+              aria-label="Ver detalhes da mostra {{ modelo.nome }}"
+            >
+              <header class="modelo-card-head row">
+                <span class="status-badge" [class.status-badge--ativo]="modelo.status === 'ativo'">
+                  {{ statusLabel(modelo.status) }}
+                </span>
+              </header>
+              <div class="stack-sm">
+                <h3 class="t-label-lg modelo-title">{{ modelo.nome }}</h3>
+                @if (modelo.tipo) {
+                  <span class="t-caption modelo-tipo">{{ modelo.tipo }}</span>
+                }
+                @if (modelo.descricao) {
+                  <p class="t-body-sm text-muted modelo-desc">
+                    {{ modelo.descricao }}
+                  </p>
+                }
+                <div class="modelo-meta row stack-xs">
+                  <span class="t-caption text-muted">
+                    <span class="icon icon-16" aria-hidden="true">event</span>
+                    {{ formatDate(modelo.dataInicio) ?? '—' }}
+                  </span>
+                  @if (modelo.dataFim) {
+                    <span class="t-caption text-muted">
+                      <span class="icon icon-16" aria-hidden="true">event_busy</span>
+                      até {{ formatDate(modelo.dataFim) }}
+                    </span>
+                  }
+                  @if (modelo.curador) {
+                    <span class="t-caption text-muted">
+                      <span class="icon icon-16" aria-hidden="true">person</span>
+                      {{ modelo.curador }}
+                    </span>
+                  }
+                </div>
+              </div>
+              <footer class="modelo-card-footer row">
+                <button
+                  class="btn btn--primary btn--compact"
+                  type="button"
+                  (click)="goToModelo(modelo.id)"
+                >
+                  Ver mostra
+                  <span class="icon icon-16" aria-hidden="true">chevron_right</span>
+                </button>
+              </footer>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  }
+</main>

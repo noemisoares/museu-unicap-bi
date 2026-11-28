@@ -1,0 +1,111 @@
+<!-- Unidades expositoras / espaços físicos do museu. -->
+<header class="page-header">
+  <div class="page-header-inner row">
+    <h1 class="t-headline-md">Unidades</h1>
+    <p class="t-caption text-muted">
+      Espaços expositores e mostras do Espaço Cultural UNICAP.
+    </p>
+  </div>
+</header>
+
+<main class="page unidades-list">
+  <section class="controls card stack-sm">
+    <div class="row controls-row">
+      <label class="search-field row">
+        <span class="icon icon-18 text-primary" aria-hidden="true">search</span>
+        <span class="sr-only">Buscar unidade por nome, cidade ou estado</span>
+        <input
+          type="search"
+          class="input"
+          [value]="query()"
+          (input)="onBuscaChange($event)"
+          aria-label="Buscar unidade por nome, cidade ou estado"
+          placeholder="Buscar unidade…"
+        />
+      </label>
+
+      <label class="checkbox-row row">
+        <input
+          type="checkbox"
+          class="checkbox"
+          [checked]="onlyActive()"
+          (change)="onOnlyActiveChange($event)"
+          aria-label="Exibir apenas unidades ativas"
+        />
+        <span class="t-label-md">Apenas ativas</span>
+      </label>
+    </div>
+  </section>
+
+  @if (isLoading()) {
+    <div class="empty-state row stack-sm" role="status">
+      <span class="icon icon-32 spin" aria-hidden="true">progress_activity</span>
+      <p class="t-label-lg text-muted">Carregando unidades…</p>
+    </div>
+  } @else if (loadFailed()) {
+    <div class="empty-state row stack-sm">
+      <p class="feedback feedback--error" role="alert">
+        <span class="icon icon-18" aria-hidden="true">cloud_off</span>
+        Não foi possível carregar as unidades.
+      </p>
+      <button
+        class="btn btn--primary btn--compact"
+        type="button"
+        (click)="loadUnidades()"
+      >
+        Tentar novamente
+      </button>
+    </div>
+  } @else if (filteredUnidades().length === 0) {
+    <div class="empty-state row stack-sm">
+      <span class="icon icon-32" aria-hidden="true">search_off</span>
+      <p class="t-label-lg text-muted">Nenhuma unidade encontrada.</p>
+      <p class="t-caption text-muted">
+        Ajuste o filtro de busca ou desmarque “Apenas ativas”.
+      </p>
+    </div>
+  } @else {
+    <section class="units-grid" aria-label="Lista de unidades expositoras">
+      @for (unidade of filteredUnidades(); track unidade.id) {
+        <article
+          class="unit-card card"
+          [class.unit-card--inactive]="!unidade.ativo"
+          (click)="goToUnidade(unidade.id)"
+          role="button"
+          tabindex="0"
+          aria-label="Ver detalhes de {{ unidade.nome }}"
+        >
+          <header class="unit-card-head row">
+            <span class="unit-badge" [class.unit-badge--active]="unidade.ativo">
+              {{ unidade.ativo ? 'Ativo' : 'Inativo' }}
+            </span>
+          </header>
+          <div class="stack-sm">
+            <h2 class="t-label-lg unit-title">{{ unidade.nome }}</h2>
+            @if (unidade.sigla) {
+              <span class="t-caption unit-sigla">{{ unidade.sigla }}</span>
+            }
+            @if (unidade.descricao) {
+              <p class="t-body-sm text-muted unit-desc">
+                {{ unidade.descricao }}
+              </p>
+            }
+            <div class="unit-meta row stack-xs">
+              <span class="t-caption text-muted">{{ unidade.cidade }}, {{ unidade.estado }}</span>
+            </div>
+          </div>
+          <footer class="unit-card-footer row">
+            <button
+              class="btn btn--primary btn--compact"
+              type="button"
+              (click)="goToUnidade(unidade.id)"
+            >
+              Ver detalhes
+              <span class="icon icon-16" aria-hidden="true">chevron_right</span>
+            </button>
+          </footer>
+        </article>
+      }
+    </section>
+  }
+</main>

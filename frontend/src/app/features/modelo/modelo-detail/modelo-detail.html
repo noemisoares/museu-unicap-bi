@@ -1,0 +1,99 @@
+<!-- Detalhe de uma mostra / modelo vinculado a uma unidade. -->
+<header class="page-header">
+  <div class="page-header-inner row">
+    <button
+      class="btn btn--tonal btn--compact back-btn"
+      type="button"
+      (click)="goBackToUnidade()"
+      aria-label="Voltar à unidade"
+    >
+      <span class="icon icon-18" aria-hidden="true">arrow_back</span>
+      Voltar à unidade
+    </button>
+    <div class="title-wrapper">
+      <h1 class="t-headline-md">{{ modelo()?.nome ?? 'Mostra' }}</h1>
+      <p class="t-caption text-muted">
+        {{ statusLabel(modelo()?.status ?? 'ativo') }} •
+        {{ modelo()?.tipo ?? '—' }}
+      </p>
+    </div>
+  </div>
+</header>
+
+<main class="page modelo-detail">
+  @if (isLoading()) {
+    <div class="empty-state row stack-sm" role="status">
+      <span class="icon icon-32 spin" aria-hidden="true">progress_activity</span>
+      <p class="t-label-lg text-muted">Carregando mostra…</p>
+    </div>
+  } @else if (loadFailed()) {
+    <div class="empty-state row stack-sm">
+      <p class="feedback feedback--error" role="alert">
+        <span class="icon icon-18" aria-hidden="true">cloud_off</span>
+        Não foi possível carregar a mostra.
+      </p>
+      <button
+        class="btn btn--primary btn--compact"
+        type="button"
+        (click)="goBackToUnidade()"
+      >
+        Voltar à unidade
+      </button>
+    </div>
+  } @else if (modelo(); as m) {
+    <section class="modelo-info card stack-sm">
+      <div class="modelo-status row">
+        <span
+          class="status-badge"
+          [class.status-badge--ativo]="m.status === 'ativo'"
+        >
+          {{ statusLabel(m.status) }}
+        </span>
+      </div>
+
+      @if (m.descricao) {
+        <p class="t-body-md modelo-desc">{{ m.descricao }}</p>
+      }
+
+      <div class="modelo-meta grid">
+        <div class="meta-item">
+          <span class="t-caption text-muted meta-label">Tipo</span>
+          <p class="t-label-md meta-value">{{ m.tipo ?? '—' }}</p>
+        </div>
+        <div class="meta-item">
+          <span class="t-caption text-muted meta-label">Status</span>
+          <p class="t-label-md meta-value">{{ statusLabel(m.status) }}</p>
+        </div>
+        <div class="meta-item">
+          <span class="t-caption text-muted meta-label">Início</span>
+          <p class="t-label-md meta-value">{{ formatDate(m.dataInicio) ?? '—' }}</p>
+        </div>
+        @if (m.dataFim) {
+          <div class="meta-item">
+            <span class="t-caption text-muted meta-label">Término</span>
+            <p class="t-label-md meta-value">{{ formatDate(m.dataFim) }}</p>
+          </div>
+        }
+        @if (m.curador) {
+          <div class="meta-item">
+            <span class="t-caption text-muted meta-label">Curador</span>
+            <p class="t-label-md meta-value">{{ m.curador }}</p>
+          </div>
+        }
+      </div>
+    </section>
+
+    <section class="actions card stack-sm">
+      <div class="actions-row">
+        <button
+          class="btn btn--tonal btn--compact"
+          type="button"
+          (click)="goBackToUnidade()"
+        >
+          <span class="icon icon-18" aria-hidden="true">arrow_back</span>
+          Voltar à unidade
+        </button>
+      </div>
+    </section>
+  }
+</main>

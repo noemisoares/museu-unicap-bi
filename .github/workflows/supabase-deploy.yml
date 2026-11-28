@@ -1,0 +1,37 @@
+# Applies pending Supabase database migrations to the remote project.
+#
+# Manual trigger only (`workflow_dispatch`) to prevent unintended remote
+# database changes on push/merge to `main`.
+# Requires three repository secrets:
+#   SUPABASE_ACCESS_TOKEN  — personal access token from app.supabase.com/account/tokens
+#   SUPABASE_DB_PASSWORD   — database password for the project
+#   SUPABASE_PROJECT_ID    — reference ID of the Supabase project (e.g. abcdefghijklmnop)
+#
+# See: https://supabase.com/docs/guides/cli/github-action
+name: Deploy Supabase Migrations
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    name: Apply migrations
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Push migrations to remote database
+        run: supabase db push --project-ref "$SUPABASE_PROJECT_ID"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}

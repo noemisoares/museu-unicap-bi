@@ -9,7 +9,7 @@ const runtimeEnv = (globalThis as { __ENV__?: RuntimeEnv }).__ENV__;
 /**
  * Development environment configuration.
  *
- * Create `front/museum-unicap/.env` (from `.env.example`) with your
+ * Create `frontend/.env` (from `.env.example`) with your
  * `SUPABASE_URL` and `SUPABASE_ANON_KEY`. `npm start` automatically runs
  * `scripts/inject-env.mjs` to generate `public/env.js`.
  */

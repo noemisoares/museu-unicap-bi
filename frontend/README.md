@@ -26,7 +26,7 @@ Aplicação web do **Espaço Cultural e Museu de Arqueologia e Ciências Naturai
 
 ## Configuração de Ambiente
 
-1. Copie `.env.example` para `.env` dentro de `front/museum-unicap/`:
+1. Copie `.env.example` para `.env` dentro de `frontend/`:
 
 ```env
 SUPABASE_URL=https://SEU-PROJETO.supabase.co
@@ -35,14 +35,14 @@ TERMINAL_ID=Check-in Recepcao
 ```
 
 2. Nunca utilize `service_role` ou senhas no frontend.
-3. Os scripts `npm start` e `npm run build` executam automaticamente `scripts/inject-env.mjs` (`prestart` / `prebuild`), que gera `public/env.js` (ignorado pelo Git) com `window.__ENV__`. Na Vercel, configure `SUPABASE_URL`, `SUPABASE_ANON_KEY` e opcionalmente `TERMINAL_ID` nas variáveis de ambiente do projeto (com **Root Directory** em `front/museum-unicap`).
+3. Os scripts `npm start` e `npm run build` executam automaticamente `scripts/inject-env.mjs` (`prestart` / `prebuild`), que gera `public/env.js` (ignorado pelo Git) com `window.__ENV__`. Na Vercel, configure `SUPABASE_URL`, `SUPABASE_ANON_KEY` e opcionalmente `TERMINAL_ID` nas variáveis de ambiente do projeto (com **Root Directory** em `frontend`).
 
 ---
 
 ## Estrutura do Projeto
 
 ```text
-front/museum-unicap/
+frontend/
 ├── scripts/
 │   └── inject-env.mjs        # Injeta variáveis de ambiente em public/env.js
 ├── src/
@@ -73,3 +73,14 @@ front/museum-unicap/
 | `npm test` | Executa os testes via Angular CLI (`ng test`) |
 | `npx vitest run` | Executa a suíte unitária diretamente via Vitest |
 | `npx tsc --noEmit -p tsconfig.app.json` | Verifica tipagem da aplicação |
+
+---
+
+## Deploy na Vercel
+
+- **Root Directory:** `frontend`
+- **Build Command:** `npm run build`
+- **Output Directory:** `dist/museum-unicap/browser`
+- **Install Command:** `npm install`
+- **Node.js Version:** `22.x` (`>= 22.22.3`)
+- **Variáveis de Ambiente:** `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `TERMINAL_ID` (`Check-in Recepcao`)

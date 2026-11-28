@@ -1,7 +1,6 @@
 interface RuntimeEnv {
   SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;
-  TERMINAL_ID?: string;
 }
 
 const runtimeEnv = (globalThis as { __ENV__?: RuntimeEnv }).__ENV__;
@@ -15,12 +14,10 @@ const runtimeEnv = (globalThis as { __ENV__?: RuntimeEnv }).__ENV__;
  */
 export const environment = {
   production: true,
-  /** @deprecated — left for backward compatibility; new code uses Supabase client. */
+  /** Same-origin Express API, proxied in development and on Vercel. */
   apiUrl: '/api/v1',
   /** Mock API simulator — MUST stay false in production. */
   useMockApi: false,
-  /** Identity of the terminal running this instance. */
-  terminalId: runtimeEnv?.TERMINAL_ID || 'Check-in Recepcao',
   /** Supabase project URL. */
   supabaseUrl: runtimeEnv?.SUPABASE_URL || '__SUPABASE_URL__',
   /** Supabase publishable (anon) key — safe for browser. */

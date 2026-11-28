@@ -30,7 +30,6 @@ export interface CheckInRequest {
   neighborhood: string | null;
   /** `null` when the visitor skips the optional contact step. */
   contact: CheckInContact | null;
-  terminalId: string;
 }
 
 /** Response of `POST /api/v1/checkins`. */

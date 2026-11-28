@@ -87,7 +87,7 @@ describe('Pedagogical', () => {
     const { fixture, element } = await setup();
 
     await goToFinalStep(fixture, element);
-    clickChoiceByLabel(element, 'Agendar novas visitas escolares?');
+    clickChoiceByLabel(element, 'Autorizo contato sobre novas visitas escolares');
     setInputValue(element, 'suggestions', 'Roteiro excelente para História de PE.');
     submitForm(element);
     await settle(fixture);
@@ -121,5 +121,34 @@ describe('Pedagogical', () => {
 
     expect(element.textContent).not.toContain('Relatório Enviado!');
     expect(element.textContent).toContain('Serviço indisponível.');
+  });
+
+  it('does not send contact after authorization is withdrawn', async () => {
+    pedagogicalServiceMock.submitEvaluation.mockResolvedValue({
+      protocol: 'PED-2026-999999',
+      evaluatedAt: '2026-11-27T11:00:00Z',
+    });
+    const { fixture, element } = await setup();
+    await goToFinalStep(fixture, element);
+
+    expect(element.querySelector('#contact-value')).toBeNull();
+    clickChoiceByLabel(element, 'Autorizo contato sobre novas visitas escolares');
+    await settle(fixture);
+    clickRadio(element, 'phone');
+    await settle(fixture);
+    setInputValue(element, 'contact-value', '8133334444');
+    clickChoiceByLabel(element, 'Autorizo contato sobre novas visitas escolares');
+    await settle(fixture);
+    expect(element.querySelector('#contact-value')).toBeNull();
+
+    submitForm(element);
+    await settle(fixture);
+    expect(pedagogicalServiceMock.submitEvaluation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        interestedInFutureVisits: false,
+        contactChannel: null,
+        contactValue: null,
+      }),
+    );
   });
 });

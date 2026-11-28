@@ -17,7 +17,6 @@ export interface SatisfactionEvaluationRequest {
   rating: SatisfactionRating;
   /** Optional list of selected topic ids (zero, one or many). */
   topicIds: string[];
-  terminalId: string;
 }
 
 /** Response of `POST /api/v1/avaliacoes-satisfacao`. */

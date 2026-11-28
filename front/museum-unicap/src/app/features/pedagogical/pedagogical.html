@@ -317,44 +317,50 @@
 
           <label class="switch-row">
             <span class="stack-xs switch-copy">
-              <span class="t-label-lg">Agendar novas visitas escolares?</span>
+              <span class="t-label-lg">Autorizo contato sobre novas visitas escolares</span>
               <span class="t-caption text-muted">
-                Receber prioridade no calendário do próximo semestre
+                A equipe do museu usará o telefone informado apenas para tratar de futuras visitas escolares.
               </span>
             </span>
             <span class="switch">
-              <input type="checkbox" [formField]="pedagogicalForm.interestedInFutureVisits" />
+              <input
+                type="checkbox"
+                [formField]="pedagogicalForm.interestedInFutureVisits"
+                (change)="onContactConsentChange($event)"
+              />
               <span class="switch-track" aria-hidden="true">
                 <span class="switch-knob"></span>
               </span>
             </span>
           </label>
 
-          <fieldset class="stack-xs">
-            <legend class="field-label">
-              Canal de Contato do Professor / Coordenação (opcional)
-            </legend>
-            <div class="segment-grid segment-grid--two" role="radiogroup" aria-label="Canal de preferência de contato">
-              <label class="choice choice--segment">
-                <input
-                  type="radio"
-                  value="whatsapp"
-                  [formField]="pedagogicalForm.contactChannel"
-                />
-                <span class="icon icon-18" aria-hidden="true">chat</span>
-                <span class="t-label-md">WhatsApp</span>
-              </label>
-              <label class="choice choice--segment">
-                <input
-                  type="radio"
-                  value="phone"
-                  [formField]="pedagogicalForm.contactChannel"
-                />
-                <span class="icon icon-18" aria-hidden="true">phone</span>
-                <span class="t-label-md">Telefone Institucional</span>
-              </label>
-            </div>
-          </fieldset>
+          @if (formModel().interestedInFutureVisits) {
+            <fieldset class="stack-xs">
+              <legend class="field-label">
+                Canal de Contato do Professor / Coordenação (opcional)
+              </legend>
+              <div class="segment-grid segment-grid--two" role="radiogroup" aria-label="Canal de preferência de contato">
+                <label class="choice choice--segment">
+                  <input
+                    type="radio"
+                    value="whatsapp"
+                    [formField]="pedagogicalForm.contactChannel"
+                  />
+                  <span class="icon icon-18" aria-hidden="true">chat</span>
+                  <span class="t-label-md">WhatsApp</span>
+                </label>
+                <label class="choice choice--segment">
+                  <input
+                    type="radio"
+                    value="phone"
+                    [formField]="pedagogicalForm.contactChannel"
+                  />
+                  <span class="icon icon-18" aria-hidden="true">phone</span>
+                  <span class="t-label-md">Telefone Institucional</span>
+                </label>
+              </div>
+            </fieldset>
+          }
 
           @if (showContactValue()) {
             <div class="stack-xs">

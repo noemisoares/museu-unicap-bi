@@ -1,64 +1,39 @@
-import { vi } from 'vitest';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
 import { SatisfactionService } from './satisfaction.service';
-import { SatisfactionEvaluationRequest } from '../models/satisfaction.models';
-
-// ---------------------------------------------------------------------------
-// SatisfactionService unit tests
-// ---------------------------------------------------------------------------
-// No TestBed needed — service has no Angular DI token dependencies.
-// We replace the internal `supabase` property with a mock object.
-// ---------------------------------------------------------------------------
 
 describe('SatisfactionService', () => {
   let service: SatisfactionService;
+  let http: HttpTestingController;
 
   beforeEach(() => {
-    service = new SatisfactionService();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('should query active satisfaction topics from core.topico', async () => {
-    const orderMock = vi.fn().mockResolvedValue({
-      data: [{ id: 'uuid-1', nome: 'Acervo Histórico', icon: 'history_edu', tipo: 'SATISFACAO', ativo: true }],
-      error: null,
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
     });
-    const eqMock = vi.fn().mockReturnValue({ order: orderMock });
-    const inMock = vi.fn().mockReturnValue({ eq: eqMock });
-    const selectMock = vi.fn().mockReturnValue({ in: inMock });
-    const fromSpy = vi
-      .spyOn((service as unknown as { supabase: { from: (...args: unknown[]) => unknown } }).supabase, 'from')
-      .mockReturnValue({ select: selectMock } as never);
+    service = TestBed.inject(SatisfactionService);
+    http = TestBed.inject(HttpTestingController);
+  });
 
-    const topics = await service.getTopics();
-    expect(fromSpy).toHaveBeenCalledWith('topico');
-    expect(topics).toEqual([
-      { id: 'uuid-1', label: 'Acervo Histórico', icon: 'history_edu' },
+  afterEach(() => http.verify());
+
+  it('gets the filtered topic contract from Express', async () => {
+    const result = service.getTopics();
+    const call = http.expectOne('/api/v1/topicos');
+    expect(call.request.method).toBe('GET');
+    call.flush([{ id: 'topic-1', label: 'Acolhimento', icon: 'emoji_people' }]);
+    await expect(result).resolves.toEqual([
+      { id: 'topic-1', label: 'Acolhimento', icon: 'emoji_people' },
     ]);
   });
 
-  it('should call registrar_satisfacao RPC for anonymous evaluation', async () => {
-    const rpcSpy = vi
-      .spyOn((service as unknown as { supabase: { rpc: (...args: unknown[]) => unknown } }).supabase, 'rpc')
-      .mockResolvedValue({
-        data: { protocol: 'SAT-2026-654321', evaluatedAt: '2026-10-18T09:05:00-03:00' },
-        error: null,
-      });
-
-    const request: SatisfactionEvaluationRequest = {
-      rating: 5,
-      topicIds: ['uuid-1'],
-      terminalId: 'Totem Saida 01',
-    };
-
-    const result = await service.submitEvaluation(request);
-    expect(rpcSpy).toHaveBeenCalledWith('registrar_satisfacao', {
-      p_nota: 5,
-      p_topico_ids: ['uuid-1'],
-      p_terminal_nome: 'Totem Saida 01',
-    });
-    expect(result.protocol).toBe('SAT-2026-654321');
+  it('posts an anonymous rating without a client-selected terminal', async () => {
+    const request = { rating: 5 as const, topicIds: ['topic-1'] };
+    const result = service.submitEvaluation(request);
+    const call = http.expectOne('/api/v1/avaliacoes-satisfacao');
+    expect(call.request.method).toBe('POST');
+    expect(call.request.body).toEqual(request);
+    call.flush({ protocol: 'SAT-2026-123456', evaluatedAt: '2026-11-27T09:05:00Z' });
+    await expect(result).resolves.toMatchObject({ protocol: 'SAT-2026-123456' });
   });
 });

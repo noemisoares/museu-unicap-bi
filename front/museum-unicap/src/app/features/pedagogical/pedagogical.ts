@@ -133,7 +133,7 @@ export class Pedagogical {
       message: `Limite de ${SUGGESTIONS_MAX_LENGTH} caracteres.`,
     });
     required(s.contactValue, {
-      when: (ctx) => ctx.valueOf(s.contactChannel) !== '',
+      when: (ctx) => ctx.valueOf(s.interestedInFutureVisits) && ctx.valueOf(s.contactChannel) !== '',
       message: 'Informe o telefone/WhatsApp para contato.',
     });
   });
@@ -162,7 +162,7 @@ export class Pedagogical {
   });
 
   protected readonly showContactValue = computed(
-    () => this.formModel().contactChannel !== '',
+    () => this.formModel().interestedInFutureVisits && this.formModel().contactChannel !== '',
   );
 
   protected readonly suggestionsLength = computed(() => this.formModel().suggestions.length);
@@ -174,6 +174,12 @@ export class Pedagogical {
   protected adjustStudentCount(delta: number): void {
     const current = this.formModel().studentCount;
     this.pedagogicalForm.studentCount().value.set(Math.max(0, current + delta));
+  }
+
+  protected onContactConsentChange(event: Event): void {
+    if (!(event.target as HTMLInputElement).checked) {
+      this.formModel.update((data) => ({ ...data, contactChannel: '', contactValue: '' }));
+    }
   }
 
   protected goToStep(target: number): void {
@@ -250,7 +256,7 @@ export class Pedagogical {
     if (!isAlignmentScore(score)) {
       return null;
     }
-    const hasContact = data.contactChannel !== '';
+    const hasContact = data.interestedInFutureVisits && data.contactChannel !== '';
     return {
       institutionName: data.institutionName.trim(),
       network: data.network,
@@ -261,7 +267,7 @@ export class Pedagogical {
       materialsRating: data.materialsRating,
       suggestions: data.suggestions.trim() || null,
       interestedInFutureVisits: data.interestedInFutureVisits,
-      contactChannel: data.contactChannel !== '' ? data.contactChannel : null,
+      contactChannel: hasContact ? data.contactChannel as ContactChannel : null,
       contactValue: hasContact ? data.contactValue.trim() || null : null,
     };
   }

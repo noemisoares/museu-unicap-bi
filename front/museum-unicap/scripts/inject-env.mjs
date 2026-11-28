@@ -43,7 +43,6 @@ loadDotEnv(envFile);
 const payload = {
   SUPABASE_URL: process.env['SUPABASE_URL'] || '',
   SUPABASE_ANON_KEY: process.env['SUPABASE_ANON_KEY'] || '',
-  TERMINAL_ID: process.env['TERMINAL_ID'] || 'Check-in Recepcao',
 };
 
 fs.mkdirSync(path.dirname(outputFile), { recursive: true });

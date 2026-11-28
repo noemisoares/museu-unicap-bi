@@ -1,18 +1,12 @@
-import { vi } from 'vitest';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
 import { CheckInService } from './checkin.service';
-import { CheckInRequest, CheckInResponse } from '../models/checkin.models';
-
-// ---------------------------------------------------------------------------
-// CheckInService unit tests
-// ---------------------------------------------------------------------------
-// These tests instantiate CheckInService directly (no TestBed needed — the
-// service has no Angular DI token dependencies beyond getSupabaseClient(),
-// which is mocked by spying on the private `supabase` property).
-// ---------------------------------------------------------------------------
+import { CheckInRequest } from '../models/checkin.models';
 
 describe('CheckInService', () => {
   let service: CheckInService;
-  let rpcSpy: ReturnType<typeof vi.fn>;
+  let http: HttpTestingController;
 
   const request: CheckInRequest = {
     visitType: 'individual',
@@ -23,50 +17,36 @@ describe('CheckInService', () => {
     municipality: 'Recife',
     neighborhood: 'Boa Vista',
     contact: null,
-    terminalId: 'Check-in Recepcao',
   };
 
   beforeEach(() => {
-    service = new CheckInService();
-    rpcSpy = vi.fn();
-    // Inject mock supabase client
-    (service as unknown as { supabase: { rpc: typeof rpcSpy } }).supabase = {
-      rpc: rpcSpy,
-    } as unknown as typeof service['supabase' & keyof CheckInService];
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(CheckInService);
+    http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
+  afterEach(() => http.verify());
+
+  it('posts the check-in model and returns the server protocol', async () => {
+    const result = service.submitCheckIn(request);
+    const call = http.expectOne('/api/v1/checkins');
+    expect(call.request.method).toBe('POST');
+    expect(call.request.body).toEqual(request);
+    expect(call.request.body).not.toHaveProperty('terminalId');
+    call.flush({ protocol: 'CHK-2026-123456', checkedInAt: '2026-11-27T09:00:00Z' });
+    await expect(result).resolves.toEqual({
+      protocol: 'CHK-2026-123456', checkedInAt: '2026-11-27T09:00:00Z',
+    });
   });
 
-  it('should call registrar_checkin RPC and return protocol and checkedInAt', async () => {
-    const response: CheckInResponse = {
-      protocol: 'CHK-2026-123456',
-      checkedInAt: '2026-10-18T09:00:00-03:00',
-    };
-
-    rpcSpy.mockResolvedValue({ data: { ...response, visitationId: 'uuid-1' }, error: null });
-
-    const result = await service.submitCheckIn(request);
-    expect(rpcSpy).toHaveBeenCalledWith(
-      'registrar_checkin',
-      expect.objectContaining({
-        p_tipo_visita: 'individual',
-        p_qtd_visitantes: 1,
-        p_faixa_etaria: 'adulto',
-        p_vinculo: 'comunidade',
-        p_uf: 'PE',
-        p_cidade: 'Recife',
-        p_bairro: 'Boa Vista',
-        p_consentimento: false,
-      }),
+  it('shows the API validation message', async () => {
+    const result = service.submitCheckIn(request);
+    http.expectOne('/api/v1/checkins').flush(
+      { code: 'INVALID_REQUEST', message: 'Quantidade de visitantes inválida.' },
+      { status: 400, statusText: 'Bad Request' },
     );
-    expect(result).toEqual(response);
-  });
-
-  it('should throw an error when Supabase RPC fails', async () => {
-    rpcSpy.mockResolvedValue({ data: null, error: { message: 'Dados inválidos.' } });
-
-    await expect(service.submitCheckIn(request)).rejects.toThrow('Dados inválidos.');
+    await expect(result).rejects.toThrow('Quantidade de visitantes inválida.');
   });
 });

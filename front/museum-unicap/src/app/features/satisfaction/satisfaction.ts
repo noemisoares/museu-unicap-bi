@@ -2,7 +2,6 @@ import { Component, inject, signal } from '@angular/core';
 import { FormField, form, required } from '@angular/forms/signals';
 import { AppModal } from '../../shared/components/app-modal/app-modal';
 import { SatisfactionService } from '../../core/services/satisfaction.service';
-import { environment } from '../../../environments/environment';
 import { RATING_SCALE_OPTIONS } from '../../core/constants/domain-options';
 import {
   SatisfactionEvaluationRequest,
@@ -59,7 +58,7 @@ export class Satisfaction {
   protected readonly successResponse = signal<SatisfactionEvaluationResponse | null>(null);
 
   constructor() {
-    // Load topics from Supabase
+    // Load active topics from the Express API.
     void this.loadTopics();
   }
 
@@ -110,7 +109,6 @@ export class Satisfaction {
     const request: SatisfactionEvaluationRequest = {
       rating,
       topicIds: this.selectedTopicIds(),
-      terminalId: environment.terminalId,
     };
     this.submitting.set(true);
     try {

@@ -2,7 +2,6 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormField, email, form, min, required } from '@angular/forms/signals';
 import { AppModal } from '../../shared/components/app-modal/app-modal';
 import { CheckInService } from '../../core/services/checkin.service';
-import { environment } from '../../../environments/environment';
 import {
   AGE_RANGE_OPTIONS,
   FEDERATION_UNIT_OPTIONS,
@@ -197,7 +196,6 @@ export class CheckIn {
           communicationConsent: data.communicationConsent,
         }
         : null,
-      terminalId: environment.terminalId,
     };
   }
 

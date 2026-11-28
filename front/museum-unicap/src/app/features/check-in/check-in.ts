@@ -1,9 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormField, email, form, min, required } from '@angular/forms/signals';
-import { firstValueFrom } from 'rxjs';
 import { AppModal } from '../../shared/components/app-modal/app-modal';
 import { CheckInService } from '../../core/services/checkin.service';
-import { apiErrorMessage } from '../../core/services/api-error';
 import { environment } from '../../../environments/environment';
 import {
   AGE_RANGE_OPTIONS,
@@ -194,10 +192,10 @@ export class CheckIn {
       neighborhood: isRecife && data.neighborhood !== '' ? data.neighborhood : null,
       contact: hasContact
         ? {
-            phone: data.phone.trim() || undefined,
-            email: data.email.trim() || undefined,
-            communicationConsent: data.communicationConsent,
-          }
+          phone: data.phone.trim() || undefined,
+          email: data.email.trim() || undefined,
+          communicationConsent: data.communicationConsent,
+        }
         : null,
       terminalId: environment.terminalId,
     };
@@ -210,11 +208,11 @@ export class CheckIn {
     }
     this.submitting.set(true);
     try {
-      const response = await firstValueFrom(this.checkInService.submitCheckIn(request));
+      const response = await this.checkInService.submitCheckIn(request);
       this.successResponse.set(response);
     } catch (error: unknown) {
-      // Never shows success on failure; values are preserved for a retry.
-      this.submitError.set(apiErrorMessage(error));
+      const message = error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
+      this.submitError.set(message);
     } finally {
       this.submitting.set(false);
     }

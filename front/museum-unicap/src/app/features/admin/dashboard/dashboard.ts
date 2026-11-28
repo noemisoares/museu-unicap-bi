@@ -1,13 +1,11 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
-import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
-import { catchError, of, startWith, switchMap } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
-import { DashboardService } from '../../../core/services/dashboard.service';
+import { DashboardPeriod, DashboardService } from '../../../core/services/dashboard.service';
 import { environment } from '../../../../environments/environment';
 import { AGE_RANGE_OPTIONS } from '../../../core/constants/domain-options';
-import { DashboardSummary } from '../../../core/models/dashboard.models';
+import { ContactsPage, DashboardSummary } from '../../../core/models/dashboard.models';
 import { SatisfactionRating } from '../../../core/models/satisfaction.models';
 
 /** Icons per rating, mirroring the prototype's sentiment icons. */
@@ -24,11 +22,8 @@ const RATING_ICONS: Record<SatisfactionRating, string> = {
  * visit overview, visitor profile/origin, satisfaction & topics and the
  * educational impact of school visits.
  *
- * Honesty rules:
- * - While the dev-only mock API is active, a "simulated data" badge is always
- *   visible and these numbers are NOT live institutional data.
- * - Export/report actions stay disabled with an explicit notice until the
- *   back-end provides the real endpoints (no fake success states).
+ * Data is loaded from Supabase via the DashboardService.
+ * All queries are protected by RLS — only authenticated admins can read.
  */
 @Component({
   imports: [DecimalPipe],
@@ -44,26 +39,17 @@ export class Dashboard {
   protected readonly demoModeActive = environment.useMockApi;
   protected readonly ratingIcons = RATING_ICONS;
 
+  protected readonly selectedPeriod = signal<DashboardPeriod>('semester');
+
   /** `undefined` = loading, `null` = load failure. */
-  protected readonly summary = toSignal(
-    this.dashboardService.getSummary().pipe(catchError(() => of(null))),
-  );
+  protected readonly summary = signal<DashboardSummary | null | undefined>(undefined);
 
   protected readonly isLoading = computed(() => this.summary() === undefined);
 
   protected readonly loadFailed = computed(() => this.summary() === null);
 
-  private readonly contactsPageNumber = signal(1);
-
   /** `undefined` = loading, `null` = load failure. */
-  protected readonly contacts = toSignal(
-    toObservable(this.contactsPageNumber).pipe(
-      startWith(1),
-      switchMap((page) =>
-        this.dashboardService.getContacts(page).pipe(catchError(() => of(null))),
-      ),
-    ),
-  );
+  protected readonly contacts = signal<ContactsPage | null | undefined>(undefined);
 
   /** Notice shown when a not-yet-integrated action is requested. */
   protected readonly pendingActionNotice = signal<string | null>(null);
@@ -85,24 +71,66 @@ export class Dashboard {
       : [];
   });
 
+  constructor() {
+    void this.loadDashboard();
+  }
+
+  protected onPeriodChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value as DashboardPeriod;
+    this.selectedPeriod.set(value);
+    void this.loadSummary(value);
+  }
+
+  private async loadDashboard(): Promise<void> {
+    await Promise.all([
+      this.loadSummary(this.selectedPeriod()),
+      this.loadContacts(1),
+    ]);
+  }
+
+  private async loadSummary(period: DashboardPeriod): Promise<void> {
+    this.summary.set(undefined);
+    try {
+      const data = await this.dashboardService.getSummary(period);
+      this.summary.set(data);
+    } catch {
+      this.summary.set(null);
+    }
+  }
+
+  private async loadContacts(page: number): Promise<void> {
+    try {
+      const contactsData = await this.dashboardService.getContacts(page);
+      this.contacts.set(contactsData);
+    } catch {
+      this.contacts.set(null);
+    }
+  }
+
   protected async logout(): Promise<void> {
-    this.authService.logout();
+    await this.authService.logout();
     await this.router.navigate(['/login']);
   }
 
   protected showPendingActionNotice(action: string): void {
     this.pendingActionNotice.set(
-      `“${action}” será disponibilizado após a integração com o back-end institucional.`,
+      `“${action}” será disponibilizado após a integração com o módulo de exportação.`,
     );
   }
 
-  protected goToContactsPage(page: number): void {
-    const contacts = this.contacts();
-    if (!contacts) {
+  protected async goToContactsPage(page: number): Promise<void> {
+    const current = this.contacts();
+    if (!current) {
       return;
     }
-    const totalPages = Math.max(1, Math.ceil(contacts.total / contacts.pageSize));
-    this.contactsPageNumber.set(Math.min(Math.max(1, page), totalPages));
+    const totalPages = Math.max(1, Math.ceil(current.total / current.pageSize));
+    const safePage = Math.min(Math.max(1, page), totalPages);
+    try {
+      const data = await this.dashboardService.getContacts(safePage);
+      this.contacts.set(data);
+    } catch {
+      // Keep current page on failure
+    }
   }
 
   /** Formats an ISO timestamp as a short pt-BR date/time. */

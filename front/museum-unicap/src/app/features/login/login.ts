@@ -1,9 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormField, form, required } from '@angular/forms/signals';
 import { Router, RouterLink } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
-import { apiErrorMessage } from '../../core/services/api-error';
 import { environment } from '../../../environments/environment';
 
 interface LoginFormData {
@@ -23,9 +21,9 @@ interface QuickLink {
  *
  * Security notes:
  * - No credentials are pre-filled, stored or logged.
- * - The route guard is a UX measure only; real authentication/authorization
- *   must be enforced by the back end once the institutional strategy exists.
- * - While the dev-only mock API is enabled, a notice explains the demo rules.
+ * - Authentication is handled by Supabase Auth (email/password).
+ * - The route guard is a UX measure only; real authorization is enforced
+ *   by RLS policies in the database.
  */
 @Component({
   imports: [FormField, RouterLink],
@@ -106,10 +104,11 @@ export class Login {
     const { identifier, password } = this.formModel();
     this.submitting.set(true);
     try {
-      await firstValueFrom(this.authService.login({ identifier, password }));
+      await this.authService.login({ identifier, password });
       await this.router.navigate(['/admin/dashboard']);
     } catch (error: unknown) {
-      this.loginError.set(apiErrorMessage(error));
+      const message = error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
+      this.loginError.set(message);
     } finally {
       this.submitting.set(false);
     }

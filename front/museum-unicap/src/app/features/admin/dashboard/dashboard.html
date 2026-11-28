@@ -84,12 +84,13 @@
           <span class="icon icon-18 text-primary" aria-hidden="true">calendar_today</span>
           <span class="sr-only">Período de referência</span>
           <select
-            (change)="showPendingActionNotice('Filtro de período')"
+            [value]="selectedPeriod()"
+            (change)="onPeriodChange($event)"
             aria-label="Período de referência"
           >
-            <option selected>Semestre Atual</option>
-            <option>Últimos 30 Dias</option>
-            <option>Ano Letivo 2025</option>
+            <option value="semester">Semestre Atual</option>
+            <option value="30d">Últimos 30 Dias</option>
+            <option value="all">Todo o Período</option>
           </select>
         </label>
         <button

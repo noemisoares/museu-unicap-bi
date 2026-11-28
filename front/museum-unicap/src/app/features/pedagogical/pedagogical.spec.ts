@@ -1,11 +1,8 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
+import { vi } from 'vitest';
 import { Pedagogical } from './pedagogical';
+import { PedagogicalService } from '../../core/services/pedagogical.service';
 import {
   clickButton,
   clickChoiceByLabel,
@@ -16,7 +13,7 @@ import {
 } from '../../testing/dom-helpers';
 
 describe('Pedagogical', () => {
-  let httpMock: HttpTestingController;
+  let pedagogicalServiceMock: { submitEvaluation: ReturnType<typeof vi.fn> };
 
   const setup = async () => {
     const fixture = TestBed.createComponent(Pedagogical);
@@ -47,15 +44,14 @@ describe('Pedagogical', () => {
   };
 
   beforeEach(async () => {
+    pedagogicalServiceMock = { submitEvaluation: vi.fn() };
     TestBed.configureTestingModule({
       imports: [Pedagogical],
-      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        provideRouter([]),
+        { provide: PedagogicalService, useValue: pedagogicalServiceMock },
+      ],
     });
-    httpMock = TestBed.inject(HttpTestingController);
-  });
-
-  afterEach(() => {
-    httpMock.verify();
   });
 
   it('should block advancing to step 2 while required school data is missing', async () => {
@@ -83,15 +79,20 @@ describe('Pedagogical', () => {
   });
 
   it('should submit the pedagogical report and confirm with a protocol', async () => {
+    pedagogicalServiceMock.submitEvaluation.mockResolvedValue({
+      protocol: 'PED-2026-999999',
+      evaluatedAt: '2026-10-18T11:00:00-03:00',
+    });
+
     const { fixture, element } = await setup();
 
     await goToFinalStep(fixture, element);
     clickChoiceByLabel(element, 'Agendar novas visitas escolares?');
     setInputValue(element, 'suggestions', 'Roteiro excelente para História de PE.');
     submitForm(element);
+    await settle(fixture);
 
-    const request = httpMock.expectOne('/api/v1/avaliacoes-pedagogicas');
-    expect(request.request.body).toEqual(
+    expect(pedagogicalServiceMock.submitEvaluation).toHaveBeenCalledWith(
       expect.objectContaining({
         institutionName: 'E.E.M. Sylvio Rabello',
         network: 'estadual',
@@ -103,24 +104,19 @@ describe('Pedagogical', () => {
         interestedInFutureVisits: true,
       }),
     );
-    request.flush({
-      protocol: 'PED-2026-999999',
-      evaluatedAt: '2026-10-18T11:00:00-03:00',
-    });
-    await settle(fixture);
-
     expect(element.textContent).toContain('Relatório Enviado!');
     expect(element.textContent).toContain('PED-2026-999999');
   });
 
   it('should not confirm the report when the API fails', async () => {
+    pedagogicalServiceMock.submitEvaluation.mockRejectedValue(
+      new Error('Serviço indisponível.'),
+    );
+
     const { fixture, element } = await setup();
 
     await goToFinalStep(fixture, element);
     submitForm(element);
-
-    const request = httpMock.expectOne('/api/v1/avaliacoes-pedagogicas');
-    request.flush({ message: 'Serviço indisponível.' }, { status: 503, statusText: 'Error' });
     await settle(fixture);
 
     expect(element.textContent).not.toContain('Relatório Enviado!');

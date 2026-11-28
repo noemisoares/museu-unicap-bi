@@ -1,9 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormField, form, maxLength, min, required } from '@angular/forms/signals';
-import { firstValueFrom } from 'rxjs';
 import { AppModal } from '../../shared/components/app-modal/app-modal';
 import { PedagogicalService } from '../../core/services/pedagogical.service';
-import { apiErrorMessage } from '../../core/services/api-error';
 import {
   CURRICULUM_ALIGNMENT_SCALE,
   EDUCATION_NETWORK_OPTIONS,
@@ -282,12 +280,11 @@ export class Pedagogical {
     }
     this.submitting.set(true);
     try {
-      const response = await firstValueFrom(
-        this.pedagogicalService.submitEvaluation(request),
-      );
+      const response = await this.pedagogicalService.submitEvaluation(request);
       this.successResponse.set(response);
     } catch (error: unknown) {
-      this.submitError.set(apiErrorMessage(error));
+      const message = error instanceof Error ? error.message : 'Ocorreu um erro inesperado.';
+      this.submitError.set(message);
     } finally {
       this.submitting.set(false);
     }

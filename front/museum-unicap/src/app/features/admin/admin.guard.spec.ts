@@ -1,16 +1,12 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
+import { signal } from '@angular/core';
 import { adminGuard } from './admin.guard';
 import { AuthService } from '../../core/services/auth.service';
+import { AuthSession } from '../../core/models/auth.models';
 
 describe('adminGuard', () => {
-  let authService: AuthService;
-  let httpMock: HttpTestingController;
+  let mockSession: ReturnType<typeof signal<AuthSession | null>>;
 
   const runGuard = () =>
     TestBed.runInInjectionContext(() =>
@@ -18,41 +14,38 @@ describe('adminGuard', () => {
     );
 
   beforeEach(() => {
+    mockSession = signal<AuthSession | null>(null);
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        provideRouter([]),
+        {
+          provide: AuthService,
+          useValue: {
+            session: mockSession.asReadonly(),
+            ensureSessionInitialized: async () => mockSession(),
+          },
+        },
+      ],
     });
-    authService = TestBed.inject(AuthService);
-    httpMock = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => {
-    httpMock.verify();
-  });
-
-  it('should redirect anonymous users to the login screen', () => {
-    const result = runGuard();
+  it('should redirect anonymous users to the login screen', async () => {
+    const result = await runGuard();
     const urlTree = result as { toString(): string };
     expect(urlTree.toString()).toContain('/login');
   });
 
-  it('should allow access for an authenticated session', () => {
-    authService.login({ identifier: 'gestao@unicap.br', password: '123456' }).subscribe();
-    httpMock
-      .expectOne('/api/v1/auth/login')
-      .flush({ session: { name: 'Gestão', email: 'gestao@unicap.br', role: 'gestao' } });
-
-    expect(runGuard()).toBe(true);
+  it('should allow access for an authenticated admin session', async () => {
+    mockSession.set({ name: 'Gestão', email: 'gestao@unicap.br', role: 'gestao' });
+    const result = await runGuard();
+    expect(result).toBe(true);
   });
 
-  it('should block access again after logout', () => {
-    authService.login({ identifier: 'gestao@unicap.br', password: '123456' }).subscribe();
-    httpMock
-      .expectOne('/api/v1/auth/login')
-      .flush({ session: { name: 'Gestão', email: 'gestao@unicap.br', role: 'gestao' } });
+  it('should block access again after logout', async () => {
+    mockSession.set({ name: 'Gestão', email: 'gestao@unicap.br', role: 'gestao' });
+    mockSession.set(null);
 
-    authService.logout();
-
-    const result = runGuard();
+    const result = await runGuard();
     expect((result as { toString(): string }).toString()).toContain('/login');
   });
 });

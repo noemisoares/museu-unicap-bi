@@ -1,11 +1,8 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
+import { vi } from 'vitest';
 import { CheckIn } from './check-in';
+import { CheckInService } from '../../core/services/checkin.service';
 import {
   clickRadio,
   setInputValue,
@@ -14,7 +11,7 @@ import {
 } from '../../testing/dom-helpers';
 
 describe('CheckIn', () => {
-  let httpMock: HttpTestingController;
+  let checkInServiceMock: { submitCheckIn: ReturnType<typeof vi.fn> };
 
   const setup = async () => {
     const fixture = TestBed.createComponent(CheckIn);
@@ -30,21 +27,19 @@ describe('CheckIn', () => {
     clickRadio(element, 'comunidade');
     clickRadio(element, 'PE');
     clickRadio(element, 'Recife');
-    // The neighborhood quick-select only renders after Recife is chosen.
     await settle(fixture);
     clickRadio(element, 'Boa Vista');
   };
 
   beforeEach(async () => {
+    checkInServiceMock = { submitCheckIn: vi.fn() };
     TestBed.configureTestingModule({
       imports: [CheckIn],
-      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        provideRouter([]),
+        { provide: CheckInService, useValue: checkInServiceMock },
+      ],
     });
-    httpMock = TestBed.inject(HttpTestingController);
-  });
-
-  afterEach(() => {
-    httpMock.verify();
   });
 
   it('should render the four MVP visit types', async () => {
@@ -61,7 +56,7 @@ describe('CheckIn', () => {
     await settle(fixture);
 
     expect(element.textContent).toContain('Selecione o tipo de visita.');
-    httpMock.expectNone('/api/v1/checkins');
+    expect(checkInServiceMock.submitCheckIn).not.toHaveBeenCalled();
   });
 
   it('should not require the group size for individual visits', async () => {
@@ -83,46 +78,42 @@ describe('CheckIn', () => {
     expect(element.textContent).toContain(
       'Informe a quantidade de pessoas do grupo (mínimo 1).',
     );
-    httpMock.expectNone('/api/v1/checkins');
+    expect(checkInServiceMock.submitCheckIn).not.toHaveBeenCalled();
   });
 
   it('should submit the check-in and show the protocol after success', async () => {
+    checkInServiceMock.submitCheckIn.mockResolvedValue({
+      protocol: 'CHK-2026-777777',
+      checkedInAt: '2026-10-18T09:12:00-03:00',
+    });
+
     const { fixture, element } = await setup();
 
     clickRadio(element, 'individual');
     await fillVisitorProfile(fixture, element);
     submitForm(element);
-
-    const request = httpMock.expectOne('/api/v1/checkins');
-    expect(request.request.body).toEqual(
-      expect.objectContaining({ visitType: 'individual', visitorCount: 1 }),
-    );
-    request.flush({
-      protocol: 'CHK-2026-777777',
-      checkedInAt: '2026-10-18T09:12:00-03:00',
-      visitorCountToday: 143,
-    });
     await settle(fixture);
 
+    expect(checkInServiceMock.submitCheckIn).toHaveBeenCalledWith(
+      expect.objectContaining({ visitType: 'individual', visitorCount: 1 }),
+    );
     expect(element.textContent).toContain('Acesso Liberado');
     expect(element.textContent).toContain('CHK-2026-777777');
   });
 
   it('should not show success and should keep an error message when the API fails', async () => {
+    checkInServiceMock.submitCheckIn.mockRejectedValue(new Error('Serviço indisponível.'));
+
     const { fixture, element } = await setup();
 
     clickRadio(element, 'individual');
     await fillVisitorProfile(fixture, element);
     setInputValue(element, 'contact-email', 'visitante@exemplo.com.br');
     submitForm(element);
-
-    const request = httpMock.expectOne('/api/v1/checkins');
-    request.flush({ message: 'Serviço indisponível.' }, { status: 500, statusText: 'Error' });
     await settle(fixture);
 
     expect(element.textContent).not.toContain('Acesso Liberado');
     expect(element.textContent).toContain('Serviço indisponível.');
-    // Typed values are preserved for a retry.
     const emailInput = element.querySelector<HTMLInputElement>('#contact-email');
     expect(emailInput?.value).toBe('visitante@exemplo.com.br');
   });

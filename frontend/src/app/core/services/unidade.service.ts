@@ -1,11 +1,13 @@
-import { Service } from '@angular/core';
-import { environment } from '../../../environments/environment';
+import { Injectable } from '@angular/core';
 import {
   Modelo,
   Unidade,
   UnidadesFilter,
   UnidadesPage,
 } from '../models/unidade.models';
+
+// TODO: Replace mock data with Supabase queries once core.unidade and core.modelo
+// tables are created and RPCs are implemented in the database.
 
 const MOCK_UNIDADES: Unidade[] = [
   {
@@ -106,46 +108,35 @@ const MOCK_MODELOS: Record<string, Modelo[]> = {
 /**
  * Service for unidade (exhibition space) and modelo (exhibition show) data.
  *
- * Falls back to mock data when `environment.useMockApi` is true or when the
- * real backend is not yet integrated.
+ * Currently backed by mock data — Supabase tables core.unidade/core.modelo
+ * are not yet created. When those tables and RPCs are ready, replace the
+ * method bodies with Supabase calls.
  */
-@Service()
+@Injectable({ providedIn: 'root' })
 export class UnidadeService {
   async getUnidades(filter?: UnidadesFilter): Promise<UnidadesPage> {
-    if (environment.useMockApi) {
-      return this.getMockUnidades(filter);
-    }
-    throw new Error('Unidade API endpoint not yet integrated.');
+    return this.getMockUnidades(filter);
   }
 
   async getUnidadeById(id: string): Promise<Unidade> {
-    if (environment.useMockApi) {
-      const unidade = MOCK_UNIDADES.find((u) => u.id === id);
-      if (!unidade) {
-        throw new Error(`Unidade ${id} não encontrada.`);
-      }
-      return unidade;
+    const unidade = MOCK_UNIDADES.find((u) => u.id === id);
+    if (!unidade) {
+      throw new Error(`Unidade ${id} não encontrada.`);
     }
-    throw new Error('Unidade API endpoint not yet integrated.');
+    return unidade;
   }
 
   async getModelosByUnidade(unidadeId: string): Promise<Modelo[]> {
-    if (environment.useMockApi) {
-      return MOCK_MODELOS[unidadeId] ?? [];
-    }
-    throw new Error('Modelo API endpoint not yet integrated.');
+    return MOCK_MODELOS[unidadeId] ?? [];
   }
 
   async getModeloById(unidadeId: string, modeloId: string): Promise<Modelo> {
-    if (environment.useMockApi) {
-      const modelos = MOCK_MODELOS[unidadeId] ?? [];
-      const modelo = modelos.find((m) => m.id === modeloId);
-      if (!modelo) {
-        throw new Error(`Modelo ${modeloId} não encontrado na unidade ${unidadeId}.`);
-      }
-      return modelo;
+    const modelos = MOCK_MODELOS[unidadeId] ?? [];
+    const modelo = modelos.find((m) => m.id === modeloId);
+    if (!modelo) {
+      throw new Error(`Modelo ${modeloId} não encontrado na unidade ${unidadeId}.`);
     }
-    throw new Error('Modelo API endpoint not yet integrated.');
+    return modelo;
   }
 
   private getMockUnidades(filter?: UnidadesFilter): Promise<UnidadesPage> {
